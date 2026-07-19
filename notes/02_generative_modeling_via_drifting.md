@@ -1,216 +1,200 @@
 # 02 · Generative Modeling via Drifting
 
-> Deng, M., Li, H., Li, T., Du, Y., & He, K. (2026).
-> *Generative Modeling via Drifting*.
-> arXiv: https://arxiv.org/abs/2602.04770 (v2). 28 pages. CC-BY 4.0.
-> 作者单位：MIT (Deng / H. Li / T. Li / K. He) + Harvard (Du)。
-> **读完 01_song_sde 之后再读**，确保 SDE / drift term 语言已掌握。
+论文：<https://arxiv.org/abs/2602.04770>（v2, 2026, CC-BY 4.0）
+作者：Deng, M., Li, H., Li, T., Du, Y., He, K. — MIT + Harvard。
 
-## 0 · 为什么读这篇
+日期：7.19
 
-- 导师指定 → 顺着这条思路推进最快能对齐他的科研主线。
-- "drifting" 字面就是 SDE 里的 drift term $f(x,t)$，跟 flow matching
-  的 velocity field $v(x,t)$ 是同一个东西的两个视角。这篇很可能给出**统一
-  两者的一个具体 framing**。
-- 关键卖点：**one-step 生成** —— ImageNet 256×256 单步 FID 1.54 (latent) /
-  1.61 (pixel)，直接对标 diffusion / flow 多步采样。如果 claim 成立，这是
-  近期 "one-NFE generator" 路线里数字最好的之一，很值得逐节拆。
+---
 
-## 1 · 一句话总结
+## 读这篇的动机
 
-不再让样本在**推理时**沿 SDE / ODE 一步步演化到数据分布，而是让 pushforward
-分布 $q = f_\#p_\epsilon$ 在**训练时**沿一个 "drifting field" $V_{p,q}(x)$ 演化
-到 $p_{\mathrm{data}}$；把 $V=0 \Leftrightarrow p=q$ 的 anti-symmetric 场用一个
-attraction (真实样本) − repulsion (生成样本) 的 mean-shift 形式实例化，再配
-stop-gradient 的 MSE fixed-point loss，训练完的 $f_\theta$ 就是一步生成器。
+昨天读完 Song 2021（见 01），今天正式开这篇。导师的主线论文，绕不开。
+主 claim 很硬：ImageNet 256×256 **单步** FID 1.54 (latent) / 1.61 (pixel)。
+如果站得住，这是近期 1-NFE 生成器里数字最好的一批之一。逐节拆一下。
 
-## 2 · 关键公式
+## 一句话
 
-### 2.1 Pushforward 与训练时演化 (§3.1)
+不再让样本在**推理时**沿 SDE/ODE 演化到数据，而是让 pushforward 分布
+$q = f_\# p_\epsilon$ 在**训练时**沿一个 drifting field $V_{p,q}$ 演化到
+$p_{\text{data}}$。$V$ 取"真实样本吸引 − 生成样本排斥"的 mean-shift 形式，
+loss 用 stop-grad 的 fixed-point MSE。训完 $f_\theta$ 就是一步生成器。
 
-- 生成器 $f:\mathbb{R}^C \to \mathbb{R}^D$，$x=f(\epsilon)$，$\epsilon\sim p_\epsilon$。
-- 输出分布记 $q = f_\# p_\epsilon$（$f$ 把 $p_\epsilon$ 推前得到的分布）。
-- SGD 迭代给出模型序列 $\{f_i\}$ 和分布序列 $\{q_i\}$；样本在训练中被"漂移"：
-  $x_{i+1} = x_i + \Delta x_i$，$\Delta x_i := f_{i+1}(\epsilon) - f_i(\epsilon)$。
-- **核心视角切换**：SDE 视角里 drift 让样本在**时间**上演化；这里 drift 让
-  样本随**训练迭代**演化。
+—— 视角切换的一句：**把 drift 从 inference dynamics 挪到 training dynamics**。
+（昨天读 Song 时挂的那个悬念今天在这里落地了。）
 
-### 2.2 Drifting field 与反对称性 (§3.2)
+## 公式记忆点
 
-Drifting field $V_{p,q}:\mathbb{R}^d\to\mathbb{R}^d$ 满足更新方程
+### 2.1 Pushforward，训练时演化
+
+生成器 $f:\mathbb{R}^C\to\mathbb{R}^D$，$x = f(\epsilon)$，$\epsilon\sim p_\epsilon$。
+输出分布记 $q = f_\# p_\epsilon$。SGD 走一步，模型序列 $\{f_i\}$、分布序列
+$\{q_i\}$，样本被"漂移"：
 
 $$
-x_{i+1} = x_i + V_{p,q_i}(x_i)\tag{2}
+x_{i+1} = x_i + \Delta x_i, \quad \Delta x_i = f_{i+1}(\epsilon) - f_i(\epsilon)
 $$
 
-**Prop. 3.1（反对称 ⇒ 均衡）**：若 $V_{p,q}(x)=-V_{q,p}(x)\ \forall x$，则
-$q=p \Rightarrow V_{p,q}(x)=0$。逆命题一般不成立，作者只在 §3.3 的核形式下
-给出 "$V\approx 0 \Rightarrow q\approx p$" 的充分条件（Appx C.1）。
+对应到抽象的 update：$x_{i+1} = x_i + V_{p,q_i}(x_i)$。
 
-### 2.3 Fixed-point 训练目标 (§3.2)
+### 2.2 Drifting field + 反对称
 
-最优参数 $\hat\theta$ 满足 fixed point：$f_{\hat\theta}(\epsilon) = f_{\hat\theta}(\epsilon) + V_{p,q_{\hat\theta}}(f_{\hat\theta}(\epsilon))$。
-迭代式转成 loss：
+Drifting field $V_{p,q}:\mathbb{R}^d\to\mathbb{R}^d$。
 
-$$
-\mathcal{L} = \mathbb{E}_\epsilon\Bigl\|\,\underbrace{f_\theta(\epsilon)}_{\text{prediction}}
-- \operatorname{stopgrad}\bigl(\underbrace{f_\theta(\epsilon) + V_{p,q_\theta}(f_\theta(\epsilon))}_{\text{frozen target}}\bigr)\Bigr\|^2 \tag{6}
-$$
+**Prop. 3.1**：如果 $V_{p,q}(x) = -V_{q,p}(x)\ \forall x$，则 $q=p \Rightarrow V=0$。
 
-- 数值上等于 $\mathbb{E}_\epsilon\|V(f(\epsilon))\|^2$，但因为 stop-grad，梯度**不穿过 $V$**
-  （$V$ 依赖 $q_\theta$，穿过一个分布不好办）。
-- 血缘：stop-grad + 自蒸馏 MSE 形式跟 SimSiam (Chen & He 2021) 和 CT
-  (Song & Dhariwal 2023) 是同一套技巧。
+反向命题不成立 —— $V\approx 0 \Rightarrow q\approx p$ 只有在核形式 + 温和
+non-degeneracy 假设下作者给了个 heuristic（Appx C.1）。这就是全文最"脆"的一块，
+后面第 5 节要单独打问号。
 
-### 2.4 核化 drifting field (§3.3)
+### 2.3 Fixed-point loss
+
+fixed point：$f_{\hat\theta}(\epsilon) = f_{\hat\theta}(\epsilon) + V_{p,q_{\hat\theta}}(f_{\hat\theta}(\epsilon))$。
+写成 loss：
 
 $$
-V_{p,q}(x) = \mathbb{E}_{y^+\sim p}\,\mathbb{E}_{y^-\sim q}\bigl[K(x,y^+,y^-)\bigr]\tag{7}
+\mathcal{L} = \mathbb{E}_\epsilon\bigl\|
+f_\theta(\epsilon) - \operatorname{sg}\bigl[\,f_\theta(\epsilon) + V_{p,q_\theta}(f_\theta(\epsilon))\bigr]
+\bigr\|^2
 $$
 
-作者选用 mean-shift (Cheng 1995) 型实例：
+数值上 = $\mathbb{E}\|V(f(\epsilon))\|^2$，但 stop-grad 保证梯度**不穿过 $V$**
+（$V$ 里嵌了 $q_\theta$，穿过一个分布不好搞）。
+
+血缘：跟 SimSiam (Chen & He 2021) 和 CT (Song & Dhariwal 2023) 是同一系
+stop-grad + 自蒸馏 MSE。所以这不是全新的训练技术，是把它嫁接到了新对象上。
+
+### 2.4 Kernel 化的 drifting field
+
+$$
+V_{p,q}(x) = \mathbb{E}_{y^+\sim p}\mathbb{E}_{y^-\sim q}[K(x,y^+,y^-)]
+$$
+
+作者取 mean-shift 型（Cheng 1995）：
 
 $$
 V^+_p(x) = \tfrac{1}{Z_p}\mathbb{E}_p[k(x,y^+)(y^+-x)],\quad
-V^-_q(x) = \tfrac{1}{Z_q}\mathbb{E}_q[k(x,y^-)(y^--x)] \tag{8}
+V^-_q(x) = \tfrac{1}{Z_q}\mathbb{E}_q[k(x,y^-)(y^--x)]
 $$
 
 $$
 V_{p,q}(x) := V^+_p(x) - V^-_q(x)
-= \tfrac{1}{Z_pZ_q}\mathbb{E}_{p,q}[k(x,y^+)k(x,y^-)(y^+-y^-)]\tag{10,11}
+= \tfrac{1}{Z_pZ_q}\mathbb{E}_{p,q}[k(x,y^+)k(x,y^-)(y^+-y^-)]
 $$
 
-- 直觉：$x$ 被真实样本 $y^+$ **吸引**，被生成样本 $y^-$ **排斥**。
-- Kernel：$k(x,y) = \exp(-\tfrac1\tau \|x-y\|)$，用 **softmax** 数值实现，
-  logits $= -\tfrac1\tau \|x-y\|$ 沿 $y$ 归一化；额外再在 batch 的 $\{x\}$ 上做
-  一遍 softmax 归一化（经验上提升），不破坏反对称性。
-- 与 InfoNCE：normalized $\tilde k$ 的 softmax 形式和 InfoNCE (Oord 2018) 同构，
-  可以理解成"对比学习 + mean-shift"的杂交。
+直觉简单：$x$ 被 $y^+$ 拉过去，被 $y^-$ 推开。
 
-### 2.5 特征空间 drifting (§3.4)
+- Kernel：$k(x,y) = \exp(-\|x-y\|/\tau)$，**$\ell_1$ 型 exp**，不是常见的 $\ell_2$ RBF。
+  实现走 softmax（logits $= -\|x-y\|/\tau$ 沿 $y$ 归一化），再额外在 batch 的 $\{x\}$ 上做
+  一次 softmax。
+- 后面这个"batch-$\{x\}$ softmax" 我目前没看懂在归一化什么维度，见第 5 节 TODO。
+- softmax 化之后跟 InfoNCE (Oord 2018) 同构 —— 视作 "对比学习 × mean-shift"。
 
-高维图像不能在像素空间直接算 kernel。改到特征空间 $\phi(\cdot)$（预训练的
-自监督 image encoder，如 MoCo 家族）：
+### 2.5 特征空间 drifting
 
-$$
-\mathbb{E}\Bigl\|\phi(x) - \operatorname{stopgrad}\bigl(\phi(x) + V(\phi(x))\bigr)\Bigr\|^2 \tag{13}
-$$
-
-多尺度多位置版本：对 ResNet 各 stage 的 $\phi_j$ 分别做 loss 再求和 (Eq. 14)。
-$\phi$ 只在**训练时**用，推理仍然是一步 $f_\theta$。
-
-- **与 perceptual loss 的区别**：perceptual loss 是 $\|\phi(x)-\phi(x_{\text{target}})\|^2$，
-  需要配对目标；这里的回归目标是 $\phi(x)+V(\phi(x))$，**不需要配对**，
-  匹配的是 pushforward 分布 $\phi_\# q \to \phi_\# p$。
-- **与 latent generation 正交**：$f_\theta$ 可以是 pixel-space 或 SD-VAE latent-space
-  的生成器；$\phi$ 是**另一个**空间的编码器；两者独立选。
-
-### 2.6 Classifier-Free Guidance (§3.5)
-
-用 mixture 负样本分布替换 $q$：
+像素空间直接算 kernel 高维下没戏。搬到 encoder $\phi$（预训练自监督，比如 MoCo）
+的特征空间：
 
 $$
-\tilde q(\cdot|c) = (1-\gamma)\,q_\theta(\cdot|c) + \gamma\,p_{\text{data}}(\cdot|\emptyset) \tag{15}
+\mathbb{E}\|\phi(x) - \operatorname{sg}[\phi(x) + V(\phi(x))]\|^2
 $$
 
-要求 $\tilde q(\cdot|c)=p_{\text{data}}(\cdot|c)$ 推出
+多尺度多位置：对 ResNet 各 stage $\phi_j$ 都算一遍再加起来。
+$\phi$ 只在训练时用，推理仍旧一次前向。
+
+- 跟 perceptual loss 的区别：perceptual 要**配对目标** $\phi(x) - \phi(x_{\text{gt}})$；
+  这里的回归目标是 $\phi(x) + V(\phi(x))$，不配对，匹配的是分布 $\phi_\# q \to \phi_\# p$。
+- 跟 latent generation 是**正交**的：$f_\theta$ 可以是 pixel-space 或 SD-VAE latent-space；
+  $\phi$ 是**另一个**空间的 encoder。两者独立选。（第一次读容易混，特别标一下。）
+
+### 2.6 训练时 CFG
+
+用 mixture 负样本分布：
+
+$$
+\tilde q(\cdot|c) = (1-\gamma)\,q_\theta(\cdot|c) + \gamma\,p_{\text{data}}(\cdot|\emptyset)
+$$
+
+要求 $\tilde q(\cdot|c) = p_{\text{data}}(\cdot|c)$，推出
 
 $$
 q_\theta(\cdot|c) = \alpha\,p_{\text{data}}(\cdot|c) - (\alpha-1)\,p_{\text{data}}(\cdot|\emptyset),
-\quad \alpha = \tfrac{1}{1-\gamma}\ge 1 \tag{16}
+\quad \alpha = \tfrac{1}{1-\gamma}\ge 1
 $$
 
-- 精神上和标准 CFG (Ho & Salimans 2022) 一致：conditional 减去 unconditional。
-- 关键差别：**CFG 是训练时行为** —— 负样本抽样 + $\alpha$ 作为条件喂给网络；
-  推理时 1-NFE 属性完全保留。作者的具体做法是 CFG-conditioning (Geng 2025b)：
-  训练时随机采样 $\alpha$ 作为条件；推理时 $\alpha$ 可任意指定不需重训。
+精神跟标准 CFG (Ho & Salimans 2022) 一致，"conditional 减 unconditional"。
+关键差别：**这里 CFG 是训练时行为**。作者的做法（CFG-conditioning, Geng 2025b）：
+训练时随机采 $\alpha$ 当条件喂给网络，推理时 $\alpha$ 任意指定，1-NFE 属性不掉。
 
-## 3 · 主要贡献
+## 跟 Song 2021 对照
 
-1. **新 paradigm**：把生成建模从"推理时演化样本"转成"训练时演化 pushforward
-   分布"，天然是 one-step (1-NFE) 生成器 —— 无需 diffusion / flow 的多步采样。
-2. **Anti-symmetric drifting field**：给出一个简单充分条件 (Prop. 3.1) 保证
-   $q=p \Rightarrow V=0$；并用 mean-shift + attraction/repulsion 给出可计算的
-   核化实例 (Eq. 8-11)。
-3. **训练目标**：stop-gradient fixed-point MSE (Eq. 6)，绕开了对 $V$ 内部 $q$
-   的反向传播；实现上就是一行 `mse(x, stopgrad(x+V))`。
-4. **Feature-space drifting**：把 loss 挪到自监督 encoder 的特征空间，多尺度
-   多位置聚合；解决高维直接用 kernel 的失败模式。
-5. **训练时 CFG**：把 CFG 表达为负样本分布的 mixture，保持 1-NFE。
-6. **实证结果**：ImageNet 256×256 单步生成 FID **1.54** (latent) / **1.61**
-   (pixel space)，作者宣称是新的 one-step SOTA；另外做了 toy 2D 演化可视化
-   (§5.1) 和 robotic control policy 生成 (§5.3) 的迁移实验。
-
-## 4 · 跟 Song 2021 的关系
-
-| 维度 | Song 2021 (SDE) | Drifting Model |
+| 维度 | Song 2021 | Drifting |
 |---|---|---|
-| 什么在演化 | **样本** 沿时间 $t$ 演化 | **pushforward 分布** 沿训练迭代 $i$ 演化 |
-| Drift 定义 | $f(x,t) - g^2 \nabla_x\log p_t(x)$ | $V_{p,q}(x)$ = 真实样本吸引 − 生成样本排斥 |
-| 依赖的目标信息 | Score $\nabla_x\log p_t$（点估计） | 两个分布 $p,q$ 的成对交互（kernel-based） |
-| 训练目标 | Denoising score matching (回归 Gaussian 转移核的 score) | Fixed-point MSE with stop-grad |
-| 推理 | Reverse SDE / probability flow ODE，多步 | 单次前向 $f_\theta(\epsilon)$，1-NFE |
-| 均衡条件 | $s_\theta \to \nabla \log p_t$（点态） | $V=0$（分布匹配的分布态） |
+| 什么在演化 | 样本沿时间 $t$ | pushforward 分布沿训练迭代 $i$ |
+| Drift 定义 | $f(x,t) - g^2\nabla\log p_t$ | $V_{p,q}$ = attraction − repulsion |
+| 依赖的目标信息 | Score（点估计） | 两分布的成对交互（kernel） |
+| 训练目标 | DSM | Fixed-point MSE + stop-grad |
+| 推理 | 反向 SDE / PF-ODE，多步 | 一次前向 $f_\theta(\epsilon)$，1-NFE |
+| 均衡条件 | $s_\theta \to \nabla\log p_t$（点态） | $V = 0$（分布态） |
 
-**共同点**：都以一个"漂移场"作为核心对象；反向 SDE 的 drift 与 probability
-flow ODE 的 drift 都在做"把 $q_t$ 推向 $p_{\text{data}}$"这件事，只是那里的
-$q_t$ 是 forward SDE 制造的 corrupted 分布，这里的 $q$ 是网络当前的 pushforward。
+共同点：都以"漂移场"为核心对象，两者都是把 $q$ 推向 $p_{\text{data}}$，
+只不过 Song 的 $q_t$ 是 forward SDE 制造出来的 corrupted 分布，这里的 $q$
+是网络当前 pushforward。
 
 **本质偏离**：
-- Song 的 drift 是**采样器**的一部分（inference-time dynamics）；
-- Drifting model 的 drift 是**优化器**的一部分（training-time dynamics）。
-- Song 学的是"给定 $t$ 时刻的分布，得分是多少"；Drifting model 学的是
-  "怎样一步把噪声推到数据"。**前者刻画路径，后者跳过路径**。
+- Song 的 drift 是**采样器**的一部分（inference dynamics）；
+- Drifting 的 drift 是**优化器**的一部分（training dynamics）。
+- Song 学"给定 $t$ 时刻分布，score 是什么"，是**刻画路径**；
+  Drifting 学"如何一步把噪声推到数据"，是**跳过路径**。
 
-**Probability flow ODE 的可能桥梁**：如果把 Song 的 probability flow ODE 从
-$t=T$ 到 $t=0$ 的整条积分定义为一个 $f_\theta(\epsilon)$，那这个 $f_\theta$ 是一个
-multi-step 的一次映射；drifting model 相当于**直接学这个映射**而不显式经过
-中间 $t$。这个视角能不能形式化 —— **读到附录时重点看**。
+一个可能的桥：把 Song 的 PF-ODE 从 $t=T$ 到 $t=0$ 整条积出来定义成一个
+$f_\theta(\epsilon)$，那 Drifting 就是**直接学这个映射**而不显式跑中间 $t$。
+—— 这个视角能不能形式化，读附录时重点看。也可能是我明天问导师的问题。
 
-## 5 · 我不理解的点
+## 我这次没搞懂的 / 存疑
 
-（读的过程中随时记）
+- Prop. 3.1 逆命题：Appx C.1 那个 heuristic 具体是几条 bilinear 约束堆出来的？
+  跟 kernel MMD (Gretton 2012) 的 characteristic kernel 假设是不是等价？
+  —— **这是文章最脆的一环，我得搞清楚**。
+- Alg. 1 里 $y^-$ 直接 reuse 同 batch 的生成样本 $x$。SGD 早期 $q$ 离 $p$ 很远，
+  $V$ 幅度会不会爆？有没有 warmup？没看到明确的。
+- Kernel 用 $\exp(-\|x-y\|/\tau)$ 而不是 $\exp(-\|x-y\|^2/\tau)$：为什么 $\ell_1$ 型更稳？
+  和 InfoNCE 常用的 cosine similarity 有没有 head-to-head？
+- $\tau$ 怎么选？跟 batch size $N_{\text{neg}}, N_{\text{pos}}$ 的 scaling？
+- $\phi$ 换成 DINOv2 / CLIP / MAE 是不是也可以？敏感性分析节在哪一节？没找到。
+- "extra softmax over $\{x\}$ within a batch"（§3.3 kernel 段落）—— InfoNCE 平时只在
+  负样本维度做一次 softmax，这里第二个 softmax 的归一化维度我没读清。
 
-- [ ] Prop. 3.1 逆命题不成立，但作者在附录 C.1 给了"kernel + 温和 non-degeneracy
-      假设下 $V\approx0 \Rightarrow q\approx p$" 的识别性 heuristic。这个 heuristic
-      具体是几个 bilinear 约束堆出来的？跟 kernel MMD (Gretton 2012) 的
-      characteristic kernel 假设是否等价？
-- [ ] 训练时 $y^-$ 直接 reuse 同 batch 的生成样本 $x$（Alg. 1），这在 SGD 早期
-      $q$ 离 $p$ 很远时会不会造成 $V$ 幅度过大 → loss 爆炸？作者有没有 warmup？
-- [ ] Kernel 用 $\exp(-\|x-y\|/\tau)$ 而不是常见的 $\exp(-\|x-y\|^2/\tau)$（RBF），
-      $\ell_1$ 型 exp 在实践里为什么更稳？跟 InfoNCE 常用的 cosine similarity 有没有比过？
-- [ ] 温度 $\tau$ 怎么选？跟 batch 大小 $N_{\text{neg}}, N_{\text{pos}}$ 的依赖关系？
-- [ ] Feature encoder $\phi$ 换成 DINOv2 / CLIP / MAE 之后 FID 会如何变化？
-      作者对 $\phi$ 的敏感性分析在哪一节？
-- [ ] "Extra softmax over $\{x\}$ within a batch"（§3.3 kernel 段落）是什么形式？
-      InfoNCE 里通常只在负样本维度做 softmax，这里加的第二个 softmax 到底在归一化什么？
+## 可能能顺下去的方向
 
-## 6 · 跟导师后续工作的连接线索
+（草记，checkpoint / HKPFS proposal 素材候选）
 
-（哪些点像是可以往下扩的方向？记下来 —— 这是 checkpoint / HKPFS proposal 的候选素材）
+- 路径 vs 端到端：drifting 完全跳路径。能不能加一条 coarse-drift + fine-drift
+  的中间监督，得到 few-step 而非严格 1-step 的质量-速度 tradeoff？
+- Drifting field 的替代形式：现在的 mean-shift + softmax kernel 只是一个朴素实例。
+  Wasserstein gradient flow / Stein variational gradient descent (Liu & Wang 2016)
+  的 drift 拿来做替代如何？
+- **Identifiability**：现在只有 heuristic。能否在 characteristic kernel + universal
+  approximator 假设下证一个 clean 的 "$V=0 \Rightarrow q=p$"？这是导师风格的活，
+  我估计他会推我做这个方向 —— 明天开会先探一下口风。
+- 训练时演化 vs 推理时演化的形式关系：能不能把 Drifting 写成 PF-ODE 在训练动态下的
+  极限？如果能，就把这条线跟 Song 2021 缝上，也顺便串起 flow matching。
+- Off-policy 负样本：作者用当前 batch 的 $x$，纯 on-policy。加一个 replay buffer 或
+  slow-moving EMA 生成器，负样本更多样，能不能加速收敛？—— MoCo 的 memory bank 思路
+  （He et al. 2020，正是这篇作者），迁移过来非常自然。
+- Robotic control (§5.3)：Diffusion policy 已经是 robot learning 标配了。单步 drifting
+  policy 如果 task success 不掉，就有很直接的落地。可做一个小 head-to-head。
 
-- **路径 vs 端到端**：drifting model 跳过了显式路径。可否引入一个可控的中间监督
-  （e.g. 学两条 drifting field：一条粗、一条细），得到 few-step 而非严格 1-step
-  的可控质量-速度 tradeoff？
-- **Drifting field 的选择**：现在的 mean-shift + softmax kernel 是一种朴素实例。
-  能否借鉴 Wasserstein gradient flow / Stein variational gradient descent
-  (Liu & Wang 2016) 里的 drift 形式，用其他 characteristic kernel？
-- **$V=0 \Rightarrow q=p$ 的充分条件**：识别性目前只有 heuristic。能否在
-  更小的假设集 (characteristic kernel, universal approximator $f_\theta$) 下证一个
-  clean 的 identifiability theorem？—— 这是**导师可能希望我做**的方向，
-  因为他风格偏理论；**读完再跟他确认**。
-- **训练时演化 vs 推理时演化的形式关系**：能否把 drifting model 严格写成
-  probability flow ODE 在训练动态下的极限？如果能，就把这条线跟 Song 2021 缝上，
-  也顺带给出 flow matching / rectified flow 的另一个视角。
-- **Off-policy 负样本**：作者用当前 batch 的 $x$ 当负样本，是纯 on-policy。
-  如果引入一个 replay buffer 或 slow-moving EMA 生成器，负样本更多样化，
-  收敛能不能加速？（模仿 MoCo 的 memory bank，He et al. 2020，正是本文作者。）
-- **Robotic control 那节 (§5.3)**：Diffusion policy 现在是 robot learning 的标配，
-  单步 drifting policy 如果 FID / task success 都不吃亏，那有非常直接的落地价值。
-  可以做**跟 diffusion policy (Chi et al.) 头对头 benchmark** 当一个小项目。
+## 待办
+
+- [ ] 明天先重读 §3.3 的 kernel 归一化细节，把两次 softmax 的维度画清；
+- [ ] Appx C.1 identifiability heuristic 逐行推一遍；
+- [ ] Alg. 1 抄下来对着代码复盘（如果作者放了 code）；
+- [ ] 跟导师碰的时候问三件：identifiability 有没有做过、feature encoder 敏感性、
+      能不能把这个 framing 往 form of PF-ODE limit 推。
 
 ---
 
-**状态**：未开始
-**开始日期**：
-**完成日期**：
+**状态**：主文读完一遍，附录 + Alg. 未细看
+**开始**：7.19
+**下一步**：Appx C.1 + §3.3 kernel 细节
