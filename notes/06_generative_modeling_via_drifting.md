@@ -1,4 +1,4 @@
-# 02 · Deng et al. 2026 — Generative Modeling via Drifting
+# 06 · Deng et al. 2026 — Generative Modeling via Drifting
 
 - arXiv：<https://arxiv.org/abs/2602.04770>（v2, 28 pages, CC-BY 4.0）
 - 作者：Deng, M., Li, H., Li, T., Du, Y., He, K.（MIT + Harvard）

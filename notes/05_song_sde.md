@@ -1,4 +1,4 @@
-# 01 · Song et al. 2021 — Score-Based Generative Modeling through SDEs
+# 05 · Song et al. 2021 — Score-Based Generative Modeling through SDEs
 
 - 出处：ICLR 2021（outstanding paper）
 - arXiv：<https://arxiv.org/abs/2011.13456>
