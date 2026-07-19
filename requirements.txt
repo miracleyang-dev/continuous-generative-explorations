@@ -1,0 +1,20 @@
+# continuous-generative-explorations - runtime dependencies
+#
+# Python: >=3.10, <3.13
+# Notes:
+#   - Use ~= (compatible release), not ==, to allow patch bumps but lock
+#     the major/minor. Avoids upstream breaking changes.
+#   - `torch` is intentionally NOT pinned to a CUDA variant here. Vanilla
+#     pip resolves the default wheel (CPU on Windows). To install a CUDA
+#     build, follow scripts/setup_venv.bat's note and reinstall from
+#     https://pytorch.org/get-started/ with the correct --index-url.
+#   - numpy stays on the 1.x line until torch's official wheels ship
+#     against numpy 2.x on every platform we care about.
+#   - einops / matplotlib / tqdm are ubiquitous in diffusion / flow-matching
+#     reference code; cheap to keep here from day one.
+
+torch~=2.3.0
+numpy~=1.26.0
+matplotlib~=3.8.0
+tqdm~=4.66.0
+einops~=0.7.0

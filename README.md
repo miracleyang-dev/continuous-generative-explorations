@@ -18,8 +18,9 @@ drift / velocity view) before touching any new method.
 
 ```
 notes/       Paper-reading notes (one .md per paper)
-scripts/     Utilities (added when first script lands)
+scripts/     Utilities (setup_venv.bat lives here)
 models/      Minimal reproductions (added when first repro lands)
+references/  Local-only PDF copies of papers (ignored by git)
 ```
 
 ## Planned notes (in reading order)
@@ -32,11 +33,37 @@ models/      Minimal reproductions (added when first repro lands)
 - `notes/02_generative_modeling_via_drifting.md`  — the paper my advisor
   handed me. Read after Song 2021 so the drift-term language lines up.
 
-## Setup
+## Setup (Windows, CMD)
 
-To be added once the first script or model reproduction lands (likely
-mirror the `.venv` + `requirements.txt` pattern from
-`arc-agi-explorations`).
+One-time install (from repo root):
+
+```cmd
+scripts\setup_venv.bat
+```
+
+This creates `.venv\`, upgrades pip, and installs runtime + dev deps from
+`requirements-dev.txt`.
+
+Every new terminal after that:
+
+```cmd
+.venv\Scripts\activate
+```
+
+Quick sanity check:
+
+```cmd
+python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+```
+
+`requirements.txt` intentionally does **not** pin a CUDA variant of
+`torch`. On GPU boxes, reinstall a CUDA wheel after the initial setup,
+e.g. for CUDA 12.1:
+
+```cmd
+.venv\Scripts\python.exe -m pip install --upgrade ^
+  --index-url https://download.pytorch.org/whl/cu121 torch
+```
 
 ## References
 

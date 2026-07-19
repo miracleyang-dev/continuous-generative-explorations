@@ -20,6 +20,10 @@ data/
 *.ckpt
 *.safetensors
 
+# Reference papers - keep local, do not commit PDFs
+references/
+*.pdf
+
 # Editor / OS
 .vscode/
 .idea/

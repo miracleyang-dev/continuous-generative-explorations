@@ -1,0 +1,17 @@
+# continuous-generative-explorations - dev / test dependencies
+#
+# Usage: `pip install -r requirements-dev.txt` (pulls in runtime deps too).
+# Kept separate from requirements.txt so a bare training env (e.g. a
+# Kaggle / Colab notebook) can install runtime only.
+
+-r requirements.txt
+
+# Notebook / plotting for reading-note prototypes
+jupyter~=1.0.0
+ipykernel~=6.29.0
+
+# Unit tests
+pytest~=8.0.0
+
+# Linter/formatter (pin one tool to avoid black/isort conflicts)
+ruff~=0.3.0
