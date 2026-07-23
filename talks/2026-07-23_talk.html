@@ -66,7 +66,7 @@ window.MathJax = {
   <div class="subtitle">从加噪-去噪到 SDE，从 SDE 到 Flow，再到一步生成</div>
   <div class="who">Yang · 7.23 · 汇报</div>
   <div class="meta">用 ← / → 或点击底部箭头翻页</div>
-  <div class="pageno">1 / 17</div>
+  <div class="pageno">1 / 19</div>
 </section>
 
 <!-- placeholders for slides 2..15 filled by subsequent edits -->
@@ -74,10 +74,11 @@ window.MathJax = {
   <h1>今天讲什么</h1>
   <div class="subtitle">目标：把 Drifting 讲透，顺带把它站在什么肩膀上讲清</div>
 
-  <h3>Part I · 生成模型是什么（约 6 分钟）</h3>
+  <h3>Part I · 生成模型是什么（约 7 分钟）</h3>
   <ul>
     <li>用一个具体例子讲清"分布"这件事</li>
     <li>Diffusion / Flow 系的统一图景 + "为什么加噪-去噪能行"的直觉</li>
+    <li><b>关键概念 1</b>：score 是啥（一根指向数据的箭头）</li>
   </ul>
 
   <h3>Part II · 主线四部曲（约 10 分钟）</h3>
@@ -86,16 +87,17 @@ window.MathJax = {
     <li>Song 2021 — SDE 与 probability flow ODE</li>
     <li>Flow Matching — velocity 视角，OT 直线路径</li>
     <li>CFG — 条件生成的通用配件</li>
+    <li><b>关键概念 2</b>：pushforward 分布（进入 Drifting 的桥梁）</li>
   </ul>
 
-  <h3>Part III · Drifting Model（约 12 分钟，重点）</h3>
+  <h3>Part III · Drifting Model（约 13 分钟，重点）</h3>
   <ul>
     <li>核心视角切换：训练时演化 pushforward 分布</li>
     <li>Drifting field + fixed-point loss + kernel 实例化</li>
     <li>与前面 5 篇的位置关系</li>
     <li>开放问题（identifiability / 连续极限 / few-step 拓展）</li>
   </ul>
-  <div class="pageno">2 / 17</div>
+  <div class="pageno">2 / 19</div>
 </section>
 <section class="slide">
   <h1>生成模型到底在干什么</h1>
@@ -128,7 +130,7 @@ window.MathJax = {
       </ul>
     </div>
   </div>
-  <div class="pageno">3 / 17</div>
+  <div class="pageno">3 / 19</div>
 </section>
 <section class="slide">
   <h1>先把"生成"这件事讲具体</h1>
@@ -151,7 +153,7 @@ window.MathJax = {
     <b>不</b>学密度，而学一个"从简单分布（高斯）出发把点搬到猫流形上"的<b>路径</b>或<b>映射</b>。<br>
     采样 = 跑这条路径 / 调用这个映射。所有六篇论文都在做这件事，区别在"怎么定义、怎么学、怎么跑"。
   </div>
-  <div class="pageno">4 / 17</div>
+  <div class="pageno">4 / 19</div>
 </section>
 <section class="slide">
   <h1>Diffusion / Flow 系的通用框架</h1>
@@ -172,7 +174,7 @@ window.MathJax = {
     <b>关键区别</b>：前两者依赖<b>时间</b>——沿 $t$ 演化<b>样本</b>；<br>
     最后一个不用时间——沿<b>训练迭代</b>演化<b>分布</b>。
   </div>
-  <div class="pageno">5 / 17</div>
+  <div class="pageno">5 / 19</div>
 </section>
 <section class="slide">
   <h1>直觉：为什么"加噪-去噪"能生成？</h1>
@@ -198,7 +200,37 @@ window.MathJax = {
   <div class="callout">
     <b>一句话</b>：加噪把"难学的分布"变成"一族好学的分布"；去噪就是把这族分布反着走一遍。
   </div>
-  <div class="pageno">6 / 17</div>
+  <div class="pageno">6 / 19</div>
+</section>
+<section class="slide">
+  <h1>关键概念 1：score 是啥？</h1>
+
+  <h3>定义</h3>
+  $$ s(x) := \nabla_x \log p(x) $$
+  <p>对 $x$ 求偏导，得到一个和 $x$ 同维度的<b>向量</b>。</p>
+
+  <h3>直觉：一根指向"数据密集处"的箭头</h3>
+  <ul>
+    <li>$p(x)$ 大 $\Rightarrow \log p(x)$ 大 $\Rightarrow \nabla\log p(x)$ 指向<b>更大的方向</b>。</li>
+    <li>所以在任意点 $x$，$s(x)$ 就是<b>朝"更像真实数据"方向的一根箭头</b>。</li>
+  </ul>
+
+  <div class="fig">
+        噪声区                  数据流形
+     ·   ·   ·   ·   →   →   →   🐱 🐱 🐱
+     ·   ·   ·   ·   →   →   →   🐱 🐱 🐱
+              ↑                      ↑
+        score 箭头指向这里     数据在这里最密集
+  </div>
+
+  <h3>Langevin：沿箭头走，就能采到数据</h3>
+  $$ x \leftarrow x + \tfrac{\eta}{2}\,s(x) + \sqrt{\eta}\,z,\quad z\sim\mathcal{N}(0,I) $$
+  <p style="font-size:15px;">"往密度更大的方向挪一小步 + 加一点点噪声防止陷在一处" —— 反复迭代就能采出符合 $p$ 的样本。</p>
+
+  <div class="callout">
+    <b>关键洞察</b>：不需要知道 $p(x)$ 的<b>值</b>，只需要知道它的<b>梯度方向</b>。NCSN/DDPM/Song 全都在学这根箭头。
+  </div>
+  <div class="pageno">7 / 19</div>
 </section>
 <section class="slide">
   <h1>DDPM · 离散加噪-去噪</h1>
@@ -206,12 +238,15 @@ window.MathJax = {
 
   <h3>Forward（加噪，无学习参数）</h3>
   $$ q(x_t\mid x_{t-1}) = \mathcal{N}(\sqrt{1-\beta_t}\,x_{t-1},\,\beta_t I) $$
+  <p style="font-size:15px;color:var(--muted);">读作：每步把图<em>缩一点点</em>（乘 $\sqrt{1-\beta_t}<1$）+ 加一点高斯噪声。$\beta_t$ 是提前定好的很小的数（如 $10^{-4}\!\to\!0.02$）。</p>
   <p>令 $\bar\alpha_t = \prod_{s\le t}(1-\beta_s)$，有闭式边缘：</p>
   $$ x_t = \sqrt{\bar\alpha_t}\,x_0 + \sqrt{1-\bar\alpha_t}\,\varepsilon,\quad \varepsilon\sim\mathcal{N}(0,I) $$
+  <p style="font-size:15px;color:var(--muted);">好处：不用真的迭代 1000 次，<em>任何</em> $x_t$ 一步到位就能采出来。训练时直接采就行。</p>
 
   <h3>Reverse（去噪，学习）</h3>
   <p>用一个 U-Net 预测噪声 $\varepsilon_\theta(x_t, t)$，训练目标极简：</p>
   $$ L_{\text{simple}} = \mathbb{E}_{t, x_0, \varepsilon}\bigl\|\varepsilon - \varepsilon_\theta(x_t, t)\bigr\|^2 $$
+  <p style="font-size:15px;color:var(--muted);">给网络看一张<em>加过噪的图 + 时间步 $t$</em>，让它猜"我加了什么噪声"。就这么简单——一个 MSE。</p>
 
   <h3>推理</h3>
   <p>从 $x_T\sim\mathcal{N}(0,I)$ 一步步倒推到 $x_0$，$T$ 通常为 1000 步。</p>
@@ -227,7 +262,7 @@ window.MathJax = {
       <li><b>采样</b>：$x_{1000}$ 直接从 $\mathcal{N}(0,I)$ 采，网络预测噪声 → 减去一点得到 $x_{999}$ → 循环 1000 次 → $x_0$ 是一张全新的猫。</li>
     </ul>
   </div>
-  <div class="pageno">7 / 17</div>
+  <div class="pageno">8 / 19</div>
 </section>
 <section class="slide">
   <h1>Song 2021 · 连续化 → SDE</h1>
@@ -244,6 +279,7 @@ window.MathJax = {
   <h3>Reverse-time SDE（Anderson 1982）</h3>
   $$ dx = \bigl[f(x,t) - g(t)^2\,\nabla_x\log p_t(x)\bigr]\,dt + g(t)\,d\bar W $$
   <p>只要拿到 <span class="kw">score</span> $s_\theta \approx \nabla_x\log p_t$，反向 drift 就完全确定。</p>
+  <p style="font-size:15px;color:var(--muted);">拆开看：原 drift $f$ <em>反着走</em>，同时被 score 项<em>推向数据流形</em>；随机项换成反向布朗运动 $d\bar W$。</p>
 
   <h3>Probability flow ODE（同边缘、无随机）</h3>
   $$ dx = \bigl[f(x,t) - \tfrac12 g(t)^2\,s(x,t)\bigr]\,dt $$
@@ -265,7 +301,7 @@ window.MathJax = {
       </ul>
     </div>
   </div>
-  <div class="pageno">8 / 17</div>
+  <div class="pageno">9 / 19</div>
 </section>
 <section class="slide">
   <h1>Flow Matching · velocity 视角</h1>
@@ -293,7 +329,7 @@ window.MathJax = {
     <b>直觉</b>：diffusion 走的是弯路（先扩散再往回聚），FM-OT 直接<b>直线插值</b>噪声到数据。网络学的"速度"就是"从起点直冲终点的常向量"。<br>
     整个训练目标就一行：$\|v_\theta(x_t, t) - (x_1 - x_0)\|^2$。采样只需 5–20 步 ODE。
   </div>
-  <div class="pageno">9 / 17</div>
+  <div class="pageno">10 / 19</div>
 </section>
 <section class="slide">
   <h1>CFG · 条件生成的通用配件</h1>
@@ -301,6 +337,7 @@ window.MathJax = {
 
   <h3>训练</h3>
   <p>共享一个网络 $\varepsilon_\theta(x_t, t, y)$，训练时以 $p_{\text{uncond}}$（通常 10–20%）概率把 $y$ 换成空标记 $\emptyset$。</p>
+  <p style="font-size:15px;color:var(--muted);">直观：让同一个网络同时学"看着 prompt 生成"和"什么都没看到瞎生成"两件事——只是同一网络的两种输入模式。</p>
 
   <h3>推理组合</h3>
   $$ \tilde\varepsilon = \varepsilon_\theta(x_t, t, \emptyset) + s\bigl(\varepsilon_\theta(x_t, t, y) - \varepsilon_\theta(x_t, t, \emptyset)\bigr) $$
@@ -330,7 +367,32 @@ window.MathJax = {
   <div class="callout">
     这个 idea 在 Drifting 里以另一形式重新出现 —— 用<b>负样本分布的 mixture</b> 实现，训练时行为，保持 1-NFE。
   </div>
-  <div class="pageno">10 / 17</div>
+  <div class="pageno">11 / 19</div>
+</section>
+<section class="slide">
+  <h1>关键概念 2：pushforward 分布是啥？</h1>
+
+  <h3>定义（直接翻译成代码）</h3>
+  <p>有网络 $f_\theta : \mathbb{R}^C \to \mathbb{R}^D$，输入噪声 $\epsilon \sim \mathcal{N}(0, I)$。</p>
+  $$ q_\theta = f_{\theta\#}\,p_\epsilon \;\;\Longleftrightarrow\;\; \text{"采一堆 }\epsilon\text{，喂进 }f_\theta\text{，输出的图像分布"} $$
+
+  <div class="fig">
+     ε₁, ε₂, ε₃, ε₄ ──▶  f_θ  ──▶  x₁, x₂, x₃, x₄
+       ↑                             ↑
+     p_ε = 𝒩(0, I)              q_θ ← 这就是 pushforward
+  </div>
+
+  <h3>为什么这个概念在 Drifting 里特别重要</h3>
+  <ul>
+    <li>diffusion / FM 里，"当前分布" $p_t$ 是<b>加噪核决定的</b>——训练迭代到哪一步都不变。</li>
+    <li>Drifting 里，"当前分布" $q_\theta$ 是<b>生成器自己吐出来的</b>——网络参数一变，$q_\theta$ 就变。</li>
+    <li>所以"分布沿训练迭代演化" = "$\theta$ 每更新一次，$q_\theta$ 就动一次"。</li>
+  </ul>
+
+  <div class="callout">
+    <b>类比</b>：$\theta$ 是一个"发牌机"的按钮，$q_\theta$ 就是"这台发牌机吐出的牌的分布"。训练 = 调按钮，让吐出的牌越来越像真牌。
+  </div>
+  <div class="pageno">12 / 19</div>
 </section>
 <section class="slide">
   <h1>Drifting Model · 视角切换</h1>
@@ -356,7 +418,8 @@ window.MathJax = {
   </ul>
 
   <div class="callout">
-    <b>1-NFE</b>：Number of Function Evaluations = 1。一张 ImageNet 256×256 图，一次前向。
+    <b>1-NFE</b>：Number of Function Evaluations = 1。一张 ImageNet 256×256 图，一次前向。<br>
+    <span style="font-size:15px;color:var(--muted);">对比：DDPM ~1000 次；DDIM/Song 50–200；FM 5–20；Consistency Model 1–4；Drifting <b>1</b>。</span>
   </div>
 
   <div class="box">
@@ -367,7 +430,7 @@ window.MathJax = {
       <li>关键代价从 <b>推理端</b> 挪到了 <b>训练端</b>。</li>
     </ul>
   </div>
-  <div class="pageno">11 / 17</div>
+  <div class="pageno">13 / 19</div>
 </section>
 <section class="slide">
   <h1>Drifting Model · 核心构造</h1>
@@ -386,12 +449,13 @@ window.MathJax = {
   $$ V_{p,q}(x) = \underbrace{\tfrac{1}{Z_p}\mathbb{E}_{y^+\sim p}[k(x,y^+)(y^+ - x)]}_{\text{被真实样本吸引}}
     - \underbrace{\tfrac{1}{Z_q}\mathbb{E}_{y^-\sim q}[k(x,y^-)(y^- - x)]}_{\text{被生成样本排斥}} $$
   <p>Kernel 用 $k(x,y) = \exp(-\|x-y\|/\tau)$，softmax 化后与 InfoNCE 同构。</p>
+  <p style="font-size:14.5px;color:var(--muted);">InfoNCE = 对比学习里最常用的损失（"和正样本近、和负样本远"）。所以 Drifting 也可以理解成：<em>把对比学习的"拉近-推远"信号，直接变成生成器的更新方向</em>。</p>
 
   <div class="callout" style="font-size:15.5px;">
     <b>物理类比</b>：把每个生成样本 $x$ 看成一颗<b>带电粒子</b>——真实样本是<b>正电荷</b>把它<b>拉过去</b>，同 batch 内的其他生成样本是<b>负电荷</b>把它<b>推开</b>。合力 = $V(x)$。<br>
     平衡时（$q = p$）拉与推<b>完全抵消</b>，$V \equiv 0$。这就是"反对称性 ⇒ 均衡"。
   </div>
-  <div class="pageno">12 / 17</div>
+  <div class="pageno">14 / 19</div>
 </section>
 <section class="slide">
   <h1>Drifting Model · 训练目标</h1>
@@ -415,7 +479,7 @@ window.MathJax = {
   <p>像素空间直接算 kernel 高维下失效 → 搬到自监督 encoder $\phi$（如 MoCo）的表征空间：</p>
   $$ \mathcal{L}_\phi = \mathbb{E}\bigl\| \phi(x) - \mathrm{sg}\bigl[\phi(x) + V(\phi(x))\bigr]\bigr\|^2 $$
   <p>$\phi$ 只在训练时用，推理仍单次前向。多尺度多位置聚合以提升表现。</p>
-  <div class="pageno">13 / 17</div>
+  <div class="pageno">15 / 19</div>
 </section>
 <section class="slide">
   <h1>Drifting Model · CFG 与实验结果</h1>
@@ -448,7 +512,7 @@ window.MathJax = {
       <li>1-NFE 推理不等于低训练成本：需大有效 batch、pretrained encoder、$O(B^2)$ 成对距离。</li>
     </ul>
   </div>
-  <div class="pageno">14 / 17</div>
+  <div class="pageno">16 / 19</div>
 </section>
 <section class="slide">
   <h1>Drifting vs 前面 5 篇 · 一图对齐</h1>
@@ -499,7 +563,7 @@ window.MathJax = {
     最短的一句概括：<br>
     <b>前面所有工作学"路径"，Drifting 直接学"从起点到终点的映射"，用分布对比作为唯一监督。</b>
   </div>
-  <div class="pageno">15 / 17</div>
+  <div class="pageno">17 / 19</div>
 </section>
 <section class="slide">
   <h1>开放问题与后续方向</h1>
@@ -526,7 +590,7 @@ window.MathJax = {
   <div class="callout">
     <b>接下来一周的计划</b>：Q1（identifiability）在 Gaussian mixture 特例上先证草稿；同步跟老师约定 Q2 的可行边界。
   </div>
-  <div class="pageno">16 / 17</div>
+  <div class="pageno">18 / 19</div>
 </section>
 <section class="slide">
   <h1>Take-aways</h1>
@@ -552,14 +616,14 @@ window.MathJax = {
   </div>
 
   <div style="text-align:center; margin-top: 20px; color: var(--muted);">— 讨论 —</div>
-  <div class="pageno">17 / 17</div>
+  <div class="pageno">19 / 19</div>
 </section>
 
 </div>
 
 <nav>
   <button onclick="prev()">◀</button>
-  <span id="pgtxt">1 / 17</span>
+  <span id="pgtxt">1 / 19</span>
   <button onclick="next()">▶</button>
 </nav>
 
