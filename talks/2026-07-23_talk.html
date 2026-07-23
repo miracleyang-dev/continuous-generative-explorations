@@ -54,6 +54,8 @@ window.MathJax = {
          white-space: pre; }
   mjx-container { overflow-x: auto; overflow-y: hidden; }
   .kw { color: var(--accent); font-weight: 600; }
+  .figimg { display: block; margin: 8px auto; max-width: 100%; max-height: 300px; }
+  .figimg-lg { display: block; margin: 8px auto; max-width: 100%; max-height: 360px; }
 </style>
 </head>
 <body>
@@ -183,12 +185,8 @@ window.MathJax = {
   <p>把训练集里的每张图想象成一颗<b>糖粒</b>。往一杯水里放糖，糖慢慢<b>扩散</b>，最后整杯均匀 —— 这就是 <b>forward 过程</b>（加噪）。</p>
   <p>如果能"倒放"整个扩散过程，就能从"均匀糖水"里<b>重现出原来那些糖粒</b>。生成模型就是学"倒放"。</p>
 
-  <div class="fig">
-     数据分布 p₀           中间 pₜ            高斯 p_T
-      🐱🐶🚗    ── forward ──▶    〰️〰️〰️    ──▶    ▪ ▪ ▪ (纯噪声)
-       ▲                                             │
-       └──────────── reverse (学的就是这个) ──────────┘
-  </div>
+  <img src="figures/02_forward_reverse.png" class="figimg" alt="forward diffusion snapshots at t=0..1">
+  <p style="text-align:center;font-size:13.5px;color:var(--muted);margin-top:-4px;">2D 数据（两团点）沿 forward diffusion 逐步扩散到高斯；reverse 就是把这排图从右往左"复原"。</p>
 
   <h3>为什么这比直接学 $p_{\text{data}}$ 好？</h3>
   <ul>
@@ -215,13 +213,8 @@ window.MathJax = {
     <li>所以在任意点 $x$，$s(x)$ 就是<b>朝"更像真实数据"方向的一根箭头</b>。</li>
   </ul>
 
-  <div class="fig">
-        噪声区                  数据流形
-     ·   ·   ·   ·   →   →   →   🐱 🐱 🐱
-     ·   ·   ·   ·   →   →   →   🐱 🐱 🐱
-              ↑                      ↑
-        score 箭头指向这里     数据在这里最密集
-  </div>
+  <img src="figures/01_score_field.png" class="figimg" alt="score field on Gaussian mixture">
+  <p style="text-align:center;font-size:13.5px;color:var(--muted);margin-top:-4px;">在一个 3-mode 高斯混合上画出的 score 场——箭头处处指向<b>密度高的地方</b>（星号 = 数据模式）。</p>
 
   <h3>Langevin：沿箭头走，就能采到数据</h3>
   $$ x \leftarrow x + \tfrac{\eta}{2}\,s(x) + \sqrt{\eta}\,z,\quad z\sim\mathcal{N}(0,I) $$
@@ -321,10 +314,8 @@ window.MathJax = {
   <h3>OT（直线）路径极简形式</h3>
   <p>取 $x_t = t x_1 + (1-t) x_0$，$x_0\sim\mathcal{N}(0,I),\ x_1\sim p_{\text{data}}$：</p>
   $$ u_t(x_t\mid x_1) = x_1 - x_0 $$
-  <div class="fig">
-    x₀ (噪声) •─────────────────────────• x₁ (数据)
-              velocity = x₁ − x₀（一个常向量）
-  </div>
+  <img src="figures/03_diffusion_vs_flow.png" class="figimg" alt="diffusion curved paths vs OT straight paths">
+  <p style="text-align:center;font-size:13.5px;color:var(--muted);margin-top:-4px;">左：diffusion / reverse-SDE 的样本轨迹弯曲带抖动。右：Flow Matching 用直线插值，网络学到的 velocity 就是常向量。</p>
   <div class="callout">
     <b>直觉</b>：diffusion 走的是弯路（先扩散再往回聚），FM-OT 直接<b>直线插值</b>噪声到数据。网络学的"速度"就是"从起点直冲终点的常向量"。<br>
     整个训练目标就一行：$\|v_\theta(x_t, t) - (x_1 - x_0)\|^2$。采样只需 5–20 步 ODE。
@@ -406,9 +397,8 @@ window.MathJax = {
 
   <h3>Drifting 的想法</h3>
   <p>把演化<b>塞进训练</b>：让"生成器输出的分布 $q_i$"沿训练迭代 $i$ 演化到 $p_{\text{data}}$；推理时只跑一次 $f_\theta(\epsilon)$。</p>
-  <div class="fig">
-    q_0 (init) ──[i=0,1,2,…]──▶ q_∞ = p_data      <b>推理 1 次前向</b>
-  </div>
+  <img src="figures/05_distribution_evolution.png" class="figimg" alt="pushforward distribution evolves along training iterations">
+  <p style="text-align:center;font-size:13.5px;color:var(--muted);margin-top:-4px;">生成器输出的分布 $q_\theta$ 随训练迭代由高斯逐步逼近两团数据。</p>
 
   <h3>符号</h3>
   <ul>
@@ -451,9 +441,10 @@ window.MathJax = {
   <p>Kernel 用 $k(x,y) = \exp(-\|x-y\|/\tau)$，softmax 化后与 InfoNCE 同构。</p>
   <p style="font-size:14.5px;color:var(--muted);">InfoNCE = 对比学习里最常用的损失（"和正样本近、和负样本远"）。所以 Drifting 也可以理解成：<em>把对比学习的"拉近-推远"信号，直接变成生成器的更新方向</em>。</p>
 
-  <div class="callout" style="font-size:15.5px;">
-    <b>物理类比</b>：把每个生成样本 $x$ 看成一颗<b>带电粒子</b>——真实样本是<b>正电荷</b>把它<b>拉过去</b>，同 batch 内的其他生成样本是<b>负电荷</b>把它<b>推开</b>。合力 = $V(x)$。<br>
-    平衡时（$q = p$）拉与推<b>完全抵消</b>，$V \equiv 0$。这就是"反对称性 ⇒ 均衡"。
+  <img src="figures/04_drifting_field.png" class="figimg" alt="drifting attraction-repulsion field">
+  <p style="text-align:center;font-size:13.5px;color:var(--muted);margin-top:-4px;">星号=真实样本（吸引），X=生成样本（排斥）。箭头是合力 $V(x)$，把生成样本推向真实模式。</p>
+  <div class="callout" style="font-size:15px;">
+    <b>物理类比</b>：真实样本 = 正电荷拉过去；同 batch 生成样本 = 负电荷推开。$q=p$ 时拉推完全抵消 $\Rightarrow V\equiv 0$。
   </div>
   <div class="pageno">14 / 19</div>
 </section>
@@ -559,6 +550,7 @@ window.MathJax = {
     </tr>
   </table>
 
+  <img src="figures/07_two_time_axes.png" class="figimg" alt="physical time vs training iteration">
   <div class="callout">
     最短的一句概括：<br>
     <b>前面所有工作学"路径"，Drifting 直接学"从起点到终点的映射"，用分布对比作为唯一监督。</b>
@@ -599,7 +591,8 @@ window.MathJax = {
     <li><b>生成模型 = 学一个能把简单分布推到数据分布的对象</b>。可以是密度、score、velocity，或者"直接一步的映射"。</li>
     <li><b>Diffusion / Flow 的统一图景</b>：选一条 $\{p_t\}_{t\in[0,1]}$，学 score 或 velocity；Song 2021 把 DDPM、NCSN 统一进 SDE；Flow Matching 用 ODE 视角 + 更短路径。</li>
     <li><b>Drifting 是一次视角切换</b>：从"推理时演化样本"改成"训练时演化分布"，天然 1-NFE。技术核心是<b>反对称 drifting field</b> + <b>stop-grad fixed-point loss</b>。</li>
-    <li>ImageNet 256×256 单步 <b>FID 1.54 (latent) / 1.61 (pixel)</b>。</li>
+    <li>ImageNet 256×256 单步 <b>FID 1.54 (latent) / 1.61 (pixel)</b>。<br>
+      <img src="figures/06_nfe_comparison.png" style="max-height:190px;margin:6px 0;" alt="NFE comparison"></li>
     <li>最脆的地方是 <b>identifiability</b>（$V=0 \Rightarrow q=p$）—— 也是最值得做下去的地方。</li>
   </ol>
 
