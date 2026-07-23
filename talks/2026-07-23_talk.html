@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>生成模型综述与 Drifting Model — 汇报</title>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$', '$']], displayMath: [['$$','$$']] },
+  svg: { fontCache: 'global' }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-svg.js"></script>
+<style>
+  :root { --fg:#1a1a1a; --muted:#666; --bg:#f7f5ef; --card:#fff;
+          --accent:#8b5a2b; --accent2:#3d5a80; --border:#e5e0d0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg);
+               font-family: "Iowan Old Style", "Palatino Linotype", Georgia, "Songti SC", serif; }
+  #stage { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  .slide { display: none; width: min(1100px, 94vw); height: min(700px, 92vh);
+           background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+           padding: 42px 56px; overflow: auto;
+           box-shadow: 0 4px 24px rgba(0,0,0,0.06); }
+  .slide.active { display: block; }
+  .slide h1 { font-size: 34px; margin: 0 0 14px; letter-spacing: -0.01em; }
+  .slide h2 { font-size: 26px; margin: 0 0 18px; color: var(--accent); }
+  .slide h3 { font-size: 18px; margin: 18px 0 6px; color: var(--accent2); }
+  .slide p, .slide li { font-size: 17px; line-height: 1.65; }
+  .slide ul { padding-left: 22px; }
+  .slide li { margin: 5px 0; }
+  .subtitle { color: var(--muted); font-size: 16px; margin-bottom: 30px; }
+  .meta { position: absolute; bottom: 18px; left: 56px; color: var(--muted); font-size: 13px; }
+  .pageno { position: absolute; bottom: 18px; right: 56px; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+  nav { position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%);
+        background: rgba(255,255,255,0.9); border: 1px solid var(--border); border-radius: 20px;
+        padding: 4px 10px; font-size: 13px; color: var(--muted); user-select: none;
+        display: flex; gap: 10px; align-items: center; z-index: 100; }
+  nav button { border: none; background: transparent; color: var(--accent); cursor: pointer; font-size: 15px; padding: 0 6px; }
+  nav button:hover { color: #000; }
+  .cover { text-align: center; padding-top: 90px; }
+  .cover h1 { font-size: 44px; margin-bottom: 8px; }
+  .cover .who { color: var(--muted); margin-top: 40px; font-size: 15px; }
+  table { border-collapse: collapse; margin: 10px 0; width: 100%; font-size: 15px; }
+  th, td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
+  th { background: #f2ede2; font-weight: 600; }
+  .box { border: 1px solid var(--border); border-radius: 6px; padding: 14px 18px;
+         background: #fbf9f2; margin: 12px 0; }
+  .callout { border-left: 4px solid var(--accent); padding: 8px 14px; background: #fbf6ea;
+             margin: 12px 0; font-size: 15.5px; }
+  .cols { display: flex; gap: 24px; }
+  .cols > div { flex: 1; }
+  .fig { text-align: center; margin: 14px 0; font-family: "SF Mono", Menlo, monospace; font-size: 14px;
+         background: #fbf9f2; border: 1px dashed var(--border); padding: 12px; border-radius: 4px;
+         white-space: pre; }
+  mjx-container { overflow-x: auto; overflow-y: hidden; }
+  .kw { color: var(--accent); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div id="stage">
+
+<!-- SLIDE 1 -->
+<section class="slide cover">
+  <h1>生成模型综述与 <em>Drifting</em></h1>
+  <div class="subtitle">从加噪-去噪到 SDE，从 SDE 到 Flow，再到一步生成</div>
+  <div class="who">Yang · 7.23 · 汇报</div>
+  <div class="meta">用 ← / → 或点击底部箭头翻页</div>
+  <div class="pageno">1 / 15</div>
+</section>
+
+<!-- placeholders for slides 2..15 filled by subsequent edits -->
+<section class="slide">
+  <h1>今天讲什么</h1>
+  <div class="subtitle">目标：把 Drifting 讲透，顺带把它站在什么肩膀上讲清</div>
+
+  <h3>Part I · 生成模型是什么（约 5 分钟）</h3>
+  <ul>
+    <li>定义与两大做法：显式建模 vs 隐式建模</li>
+    <li>Diffusion / Flow 系的统一图景</li>
+  </ul>
+
+  <h3>Part II · 主线三部曲（约 8 分钟）</h3>
+  <ul>
+    <li>DDPM & NCSN — 离散加噪-去噪</li>
+    <li>Song 2021 — SDE 与 probability flow ODE</li>
+    <li>Flow Matching — velocity 视角，OT 直线路径</li>
+    <li>CFG — 条件生成的通用配件</li>
+  </ul>
+
+  <h3>Part III · Drifting Model（约 10 分钟，重点）</h3>
+  <ul>
+    <li>核心视角切换：训练时演化 pushforward 分布</li>
+    <li>Drifting field + fixed-point loss + kernel 实例化</li>
+    <li>与前面 5 篇的位置关系</li>
+    <li>开放问题（identifiability / 连续极限 / few-step 拓展）</li>
+  </ul>
+  <div class="pageno">2 / 15</div>
+</section>
+<section class="slide">
+  <h1>生成模型到底在干什么</h1>
+
+  <div class="callout">
+    <b>任务</b>：给一堆样本 $x_1, \dots, x_N \sim p_{\text{data}}$，构造一个可采样的模型 $p_\theta$ 使 $p_\theta \approx p_{\text{data}}$。
+  </div>
+
+  <div class="cols">
+    <div>
+      <h3>两大流派</h3>
+      <ul>
+        <li><span class="kw">显式</span>：写出（对数）似然，如 VAE、Normalizing Flow、Diffusion。</li>
+        <li><span class="kw">隐式</span>：只给采样器，不写似然，如 GAN。</li>
+      </ul>
+      <h3>三种可能被拟合的对象</h3>
+      <ul>
+        <li>密度 $p_\theta(x)$ 本身</li>
+        <li>score $\nabla_x \log p_\theta(x)$</li>
+        <li>把噪声推到数据的映射 $x = f_\theta(\epsilon)$</li>
+      </ul>
+    </div>
+    <div>
+      <h3>为什么这几年"新"</h3>
+      <ul>
+        <li>GAN 稳定性差、mode collapse</li>
+        <li>VAE / NF 表达能力受结构限制</li>
+        <li>Diffusion / Flow 通过<b>逐步加噪-去噪</b>把问题拆成一族简单的条件回归</li>
+        <li>Drifting 更进一步：<b>把"逐步"塞进训练动态里</b>，推理时只跑一次</li>
+      </ul>
+    </div>
+  </div>
+  <div class="pageno">3 / 15</div>
+</section>
+<section class="slide">
+  <h1>Diffusion / Flow 系的通用框架</h1>
+
+  <h3>核心思想</h3>
+  <p>选一条概率路径 $\{p_t\}_{t\in[0,1]}$，$p_0$ 是简单先验（$\mathcal{N}(0,I)$），$p_1 = p_{\text{data}}$。</p>
+  <p>不直接学 $p_{\text{data}}$，而是学一个刻画 $p_t$ 如何演化的"矢量场"，用它反向从 $p_0$ 生成到 $p_1$。</p>
+
+  <h3>三种"矢量场"化身</h3>
+  <table>
+    <tr><th>名字</th><th>定义</th><th>典型代表</th></tr>
+    <tr><td>Score</td><td>$s(x,t) = \nabla_x \log p_t(x)$</td><td>NCSN, DDPM, Song 2021</td></tr>
+    <tr><td>Velocity</td><td>$v(x,t) = f(x,t) - \tfrac12 g(t)^2 s(x,t)$</td><td>PF-ODE, Flow Matching</td></tr>
+    <tr><td>Drifting field</td><td>$V_{p,q}(x)$（分布之间的场）</td><td>Drifting (2026)</td></tr>
+  </table>
+
+  <div class="callout">
+    <b>关键区别</b>：前两者依赖<b>时间</b>——沿 $t$ 演化<b>样本</b>；<br>
+    最后一个不用时间——沿<b>训练迭代</b>演化<b>分布</b>。
+  </div>
+  <div class="pageno">4 / 15</div>
+</section>
+<section class="slide">
+  <h1>DDPM · 离散加噪-去噪</h1>
+  <div class="subtitle">Ho, Jain, Abbeel 2020</div>
+
+  <h3>Forward（加噪，无学习参数）</h3>
+  $$ q(x_t\mid x_{t-1}) = \mathcal{N}(\sqrt{1-\beta_t}\,x_{t-1},\,\beta_t I) $$
+  <p>令 $\bar\alpha_t = \prod_{s\le t}(1-\beta_s)$，有闭式边缘：</p>
+  $$ x_t = \sqrt{\bar\alpha_t}\,x_0 + \sqrt{1-\bar\alpha_t}\,\varepsilon,\quad \varepsilon\sim\mathcal{N}(0,I) $$
+
+  <h3>Reverse（去噪，学习）</h3>
+  <p>用一个 U-Net 预测噪声 $\varepsilon_\theta(x_t, t)$，训练目标极简：</p>
+  $$ L_{\text{simple}} = \mathbb{E}_{t, x_0, \varepsilon}\bigl\|\varepsilon - \varepsilon_\theta(x_t, t)\bigr\|^2 $$
+
+  <h3>推理</h3>
+  <p>从 $x_T\sim\mathcal{N}(0,I)$ 一步步倒推到 $x_0$，$T$ 通常为 1000 步。</p>
+
+  <div class="callout">
+    <b>核心洞察</b>：把"生成一张图"拆成 1000 个「去掉一点噪声」的小任务；每个小任务都是简单的 Gaussian 回归。
+  </div>
+  <div class="pageno">5 / 15</div>
+</section>
+<section class="slide">
+  <h1>Song 2021 · 连续化 → SDE</h1>
+  <div class="subtitle">Score-Based Generative Modeling through SDEs</div>
+
+  <h3>Forward SDE</h3>
+  $$ dx = f(x,t)\,dt + g(t)\,dW,\quad t \in [0,T] $$
+
+  <h3>Reverse-time SDE（Anderson 1982）</h3>
+  $$ dx = \bigl[f(x,t) - g(t)^2\,\nabla_x\log p_t(x)\bigr]\,dt + g(t)\,d\bar W $$
+  <p>只要拿到 <span class="kw">score</span> $s_\theta \approx \nabla_x\log p_t$，反向 drift 就完全确定。</p>
+
+  <h3>Probability flow ODE（同边缘、无随机）</h3>
+  $$ dx = \bigl[f(x,t) - \tfrac12 g(t)^2\,s(x,t)\bigr]\,dt $$
+
+  <div class="cols">
+    <div>
+      <h3>一次把 DDPM 与 NCSN 装进同一框架</h3>
+      <ul>
+        <li>VP-SDE（$f = -\tfrac12\beta x, g=\sqrt\beta$）$\Leftrightarrow$ DDPM</li>
+        <li>VE-SDE（$f=0, g$ 增长）$\Leftrightarrow$ NCSN</li>
+      </ul>
+    </div>
+    <div>
+      <h3>PF-ODE 的三大用途</h3>
+      <ul>
+        <li>少步、确定性采样</li>
+        <li>精确 log-likelihood</li>
+        <li>为 Flow Matching 铺桥</li>
+      </ul>
+    </div>
+  </div>
+  <div class="pageno">6 / 15</div>
+</section>
+<section class="slide">
+  <h1>Flow Matching · velocity 视角</h1>
+  <div class="subtitle">Lipman et al. 2023</div>
+
+  <h3>换个视角</h3>
+  <p>不再学 score，直接学能把 $p_0$ 传到 $p_1$ 的 velocity $v_\theta(x, t)$：</p>
+  $$ \frac{dx}{dt} = v_\theta(x, t) $$
+
+  <h3>关键难点与解法</h3>
+  <ul>
+    <li>难点：真实 velocity $u_t(x)$ 和 $p_t(x)$ 都未知。</li>
+    <li>解法：先条件化 $u_t(x\mid z)$，MSE 回归它，梯度上等价于回归边缘 $u_t(x)$。</li>
+  </ul>
+  $$ \mathcal{L}_{\text{CFM}}(\theta) = \mathbb{E}_{t, z, x\sim p_t(\cdot\mid z)}\bigl\|v_\theta(x, t) - u_t(x\mid z)\bigr\|^2 $$
+
+  <h3>OT（直线）路径极简形式</h3>
+  <p>取 $x_t = t x_1 + (1-t) x_0$，$x_0\sim\mathcal{N}(0,I),\ x_1\sim p_{\text{data}}$：</p>
+  $$ u_t(x_t\mid x_1) = x_1 - x_0 $$
+  <div class="callout">
+    整个训练目标就一行：$\|v_\theta(x_t, t) - (x_1 - x_0)\|^2$。采样只需 5–20 步 ODE。
+  </div>
+  <div class="pageno">7 / 15</div>
+</section>
+<section class="slide">
+  <h1>CFG · 条件生成的通用配件</h1>
+  <div class="subtitle">Ho & Salimans 2022</div>
+
+  <h3>训练</h3>
+  <p>共享一个网络 $\varepsilon_\theta(x_t, t, y)$，训练时以 $p_{\text{uncond}}$（通常 10–20%）概率把 $y$ 换成空标记 $\emptyset$。</p>
+
+  <h3>推理组合</h3>
+  $$ \tilde\varepsilon = \varepsilon_\theta(x_t, t, \emptyset) + s\bigl(\varepsilon_\theta(x_t, t, y) - \varepsilon_\theta(x_t, t, \emptyset)\bigr) $$
+  <p>隐式实现了目标分布</p>
+  $$ \tilde p_t(x\mid y) \propto p_t(x)\,p_t(y\mid x)^s $$
+
+  <div class="cols">
+    <div>
+      <h3>相对 Classifier Guidance 的优势</h3>
+      <ul>
+        <li>不需要单独训分类器 $p_\phi(y\mid x_t)$</li>
+        <li>$s$ 可任意选而无需重训</li>
+      </ul>
+    </div>
+    <div>
+      <h3>缺点</h3>
+      <ul>
+        <li>推理时每步两次前向 (~2× NFE)</li>
+        <li>$s$ 大时模式塌缩</li>
+      </ul>
+    </div>
+  </div>
+  <div class="callout">
+    这个 idea 在 Drifting 里以另一形式重新出现 —— 用<b>负样本分布的 mixture</b> 实现，训练时行为，保持 1-NFE。
+  </div>
+  <div class="pageno">8 / 15</div>
+</section>
+<section class="slide">
+  <h1>Drifting Model · 视角切换</h1>
+  <div class="subtitle">Deng, Li, Li, Du, He (MIT + Harvard) 2026 — 主线论文</div>
+
+  <h3>之前的所有工作</h3>
+  <p>在<b>推理</b>时，让样本沿一条路径（SDE / ODE）从噪声演化到数据。</p>
+  <div class="fig">
+    x_T (noise) ──[t=T→0]──▶ x_0 (data)     <b>需多步</b>
+  </div>
+
+  <h3>Drifting 的想法</h3>
+  <p>把演化<b>塞进训练</b>：让"生成器输出的分布 $q_i$"沿训练迭代 $i$ 演化到 $p_{\text{data}}$；推理时只跑一次 $f_\theta(\epsilon)$。</p>
+  <div class="fig">
+    q_0 (init) ──[i=0,1,2,…]──▶ q_∞ = p_data      <b>推理 1 次前向</b>
+  </div>
+
+  <h3>符号</h3>
+  <ul>
+    <li>生成器 $f_\theta : \mathbb{R}^C \to \mathbb{R}^D$，$x = f_\theta(\epsilon)$，$\epsilon\sim\mathcal{N}(0,I)$。</li>
+    <li>Pushforward 分布 $q_\theta = f_{\theta\#}\,p_\epsilon$。</li>
+    <li>目标：训到 $q_\theta = p_{\text{data}}$，推理时单步。</li>
+  </ul>
+
+  <div class="callout">
+    <b>1-NFE</b>：Number of Function Evaluations = 1。一张 ImageNet 256×256 图，一次前向。
+  </div>
+  <div class="pageno">9 / 15</div>
+</section>
+<section class="slide">
+  <h1>Drifting Model · 核心构造</h1>
+
+  <h3>Drifting field</h3>
+  <p>训练迭代下样本的更新：</p>
+  $$ x_{i+1} = x_i + V_{p, q_i}(x_i) $$
+  <p>$V_{p,q}(x)$ 是一个依赖两个分布的向量场。</p>
+
+  <h3>反对称性 ⇒ 均衡（Prop. 3.1）</h3>
+  <p>若 $V_{p,q}(x) = -V_{q,p}(x)\ \forall x$，则</p>
+  $$ q = p \;\Longrightarrow\; V_{p,q}(x) \equiv 0 $$
+  <p>逆命题 $V\equiv 0 \Rightarrow q = p$ <b>对一般 field 不成立</b>。附录 C.1 在 <em>full support + 有限维基展开 + interaction vectors 线性独立</em>下给出充分条件——是受限设定下的识别性论证，不是一般分布空间上的完整定理。</p>
+
+  <h3>Kernel 实例化：吸引 − 排斥</h3>
+  $$ V_{p,q}(x) = \underbrace{\tfrac{1}{Z_p}\mathbb{E}_{y^+\sim p}[k(x,y^+)(y^+ - x)]}_{\text{被真实样本吸引}}
+    - \underbrace{\tfrac{1}{Z_q}\mathbb{E}_{y^-\sim q}[k(x,y^-)(y^- - x)]}_{\text{被生成样本排斥}} $$
+  <p>Kernel 用 $k(x,y) = \exp(-\|x-y\|/\tau)$，softmax 化后与 InfoNCE 同构。</p>
+  <div class="pageno">10 / 15</div>
+</section>
+<section class="slide">
+  <h1>Drifting Model · 训练目标</h1>
+
+  <h3>Fixed-point 视角</h3>
+  <p>训练完成 $\Leftrightarrow$ 生成器满足 $f_{\hat\theta}(\epsilon) = f_{\hat\theta}(\epsilon) + V_{p,q_{\hat\theta}}(f_{\hat\theta}(\epsilon))$，即 $V = 0$。</p>
+
+  <h3>Loss（关键在 stop-gradient）</h3>
+  $$ \mathcal{L}(\theta) = \mathbb{E}_\epsilon\,\bigl\| f_\theta(\epsilon) - \mathrm{sg}\bigl[\,f_\theta(\epsilon) + V_{p,q_\theta}(f_\theta(\epsilon))\bigr]\bigr\|^2 $$
+  <ul>
+    <li>数值上 $= \mathbb{E}\|V(f_\theta(\epsilon))\|^2$，但 stop-grad 阻断了对 $V$ 内含 $q_\theta$ 的反传（穿过一个分布不好办）。</li>
+    <li>target 每步随 $q_\theta$ 重新计算 → 更接近 <b>fixed-point iteration</b>；实际梯度不能直接解释为对 $\mathbb{E}\|V\|^2$ 做完整梯度下降。</li>
+    <li>结构与 <b>SimSiam</b>（Chen & He 2021）、<b>Consistency Training</b>（Song & Dhariwal 2023）同型。</li>
+  </ul>
+
+  <h3>特征空间 Drifting</h3>
+  <p>像素空间直接算 kernel 高维下失效 → 搬到自监督 encoder $\phi$（如 MoCo）的表征空间：</p>
+  $$ \mathcal{L}_\phi = \mathbb{E}\bigl\| \phi(x) - \mathrm{sg}\bigl[\phi(x) + V(\phi(x))\bigr]\bigr\|^2 $$
+  <p>$\phi$ 只在训练时用，推理仍单次前向。多尺度多位置聚合以提升表现。</p>
+  <div class="pageno">11 / 15</div>
+</section>
+<section class="slide">
+  <h1>Drifting Model · CFG 与实验结果</h1>
+
+  <h3>训练时 CFG</h3>
+  <p>用 mixture 负分布替换 $q$：</p>
+  $$ \tilde q(\cdot\mid c) = (1-\gamma)\,q_\theta(\cdot\mid c) + \gamma\,p_{\text{data}}(\cdot\mid \emptyset) $$
+  <p>要求 $\tilde q = p_{\text{data}}(\cdot\mid c)$ 解出</p>
+  $$ q_\theta(\cdot\mid c) = \alpha\,p_{\text{data}}(\cdot\mid c) - (\alpha - 1)\,p_{\text{data}}(\cdot\mid \emptyset),\quad \alpha = \tfrac{1}{1-\gamma} $$
+  <p>与 Ho & Salimans 2022 的 CFG 形式一致，但作为<b>训练时行为</b>；推理仍 1-NFE。</p>
+
+  <h3>ImageNet 256×256 主要结果</h3>
+  <table>
+    <tr><th>方法</th><th>NFE</th><th>FID</th></tr>
+    <tr><td>Diffusion (ADM-G)</td><td>250</td><td>4.59</td></tr>
+    <tr><td>Consistency Model</td><td>1</td><td>~6</td></tr>
+    <tr><td><b>Drifting (latent, SD-VAE)</b></td><td><b>1</b></td><td><b>1.54</b></td></tr>
+    <tr><td><b>Drifting (pixel)</b></td><td><b>1</b></td><td><b>1.61</b></td></tr>
+  </table>
+
+  <div class="callout">
+    <b>1-NFE SOTA</b>：数字上超越了多步 diffusion 与已有的一步蒸馏模型。
+  </div>
+
+  <div class="box">
+    <b>关键消融 & 代价</b>
+    <ul style="margin: 4px 0;">
+      <li>破坏 attraction/repulsion <b>反对称</b>结构 → 灾难性失败（与 Prop 3.1 一致）。</li>
+      <li>去掉特征 encoder $\phi$ → ImageNet 无法训成功；kernel 在原始像素空间近乎 flat。</li>
+      <li>1-NFE 推理不等于低训练成本：需大有效 batch、pretrained encoder、$O(B^2)$ 成对距离。</li>
+    </ul>
+  </div>
+  <div class="pageno">12 / 15</div>
+</section>
+<section class="slide">
+  <h1>Drifting vs 前面 5 篇 · 一图对齐</h1>
+
+  <table>
+    <tr>
+      <th>维度</th><th>Diffusion / Song 2021</th><th>Flow Matching</th><th><b>Drifting</b></th>
+    </tr>
+    <tr>
+      <td>什么在演化</td>
+      <td>样本沿物理时间 $t$</td>
+      <td>样本沿 ODE 时间 $t$</td>
+      <td><b>pushforward 分布沿训练迭代 $i$</b></td>
+    </tr>
+    <tr>
+      <td>矢量场</td>
+      <td>Score $\nabla_x\log p_t$</td>
+      <td>Velocity $v_t(x)$</td>
+      <td>Drifting field $V_{p,q}$</td>
+    </tr>
+    <tr>
+      <td>训练目标</td>
+      <td>Denoising Score Matching</td>
+      <td>Conditional FM (MSE)</td>
+      <td>Fixed-point MSE + stop-grad</td>
+    </tr>
+    <tr>
+      <td>推理 NFE</td>
+      <td>50–1000</td>
+      <td>5–100</td>
+      <td><b>1</b></td>
+    </tr>
+    <tr>
+      <td>是否显式经过中间 $t$</td>
+      <td>是</td>
+      <td>是</td>
+      <td><b>否</b></td>
+    </tr>
+    <tr>
+      <td>均衡条件</td>
+      <td>$s_\theta \to \nabla\log p_t$（点态）</td>
+      <td>$v_\theta \to u_t$（点态）</td>
+      <td>$V = 0$（分布态）</td>
+    </tr>
+  </table>
+
+  <div class="callout">
+    最短的一句概括：<br>
+    <b>前面所有工作学"路径"，Drifting 直接学"从起点到终点的映射"，用分布对比作为唯一监督。</b>
+  </div>
+  <div class="pageno">13 / 15</div>
+</section>
+<section class="slide">
+  <h1>开放问题与后续方向</h1>
+
+  <div class="cols">
+    <div>
+      <h3>理论侧</h3>
+      <ul>
+        <li><b>Identifiability</b>：$V\equiv 0 \Rightarrow q = p$ 目前只有 heuristic。能否在 characteristic kernel + universal approximator 假设下证清？—— 类比 kernel MMD 的 characteristic kernel 定理。</li>
+        <li><b>连续极限</b>：SGD 步长 $\eta\to 0$ 时，$q_\tau$ 是否满足
+          $\partial_\tau q + \nabla\cdot(q\,V) = 0$？若成立，$V$ 就是某泛函的 $W_2$ 梯度 —— 与 Song 2021 的 PF-ODE 构成物理时间 vs 训练时间的对偶。</li>
+      </ul>
+    </div>
+    <div>
+      <h3>方法侧</h3>
+      <ul>
+        <li><b>Few-step Drifting</b>：从严格 1-NFE 拓展到 $K$ 层级 $V^{(k)}$，介于 Drifting 与 Flow Matching 之间。</li>
+        <li><b>Off-policy 负样本</b>：MoCo 式 EMA 生成器提供 $y^-$，作 bias-variance 分析。</li>
+        <li><b>其他 kernel</b>：Stein / Wasserstein gradient flow 视角下选更结构化的 $V$。</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout">
+    <b>接下来一周的计划</b>：Q1（identifiability）在 Gaussian mixture 特例上先证草稿；同步跟老师约定 Q2 的可行边界。
+  </div>
+  <div class="pageno">14 / 15</div>
+</section>
+<section class="slide">
+  <h1>Take-aways</h1>
+
+  <ol>
+    <li><b>生成模型 = 学一个能把简单分布推到数据分布的对象</b>。可以是密度、score、velocity，或者"直接一步的映射"。</li>
+    <li><b>Diffusion / Flow 的统一图景</b>：选一条 $\{p_t\}_{t\in[0,1]}$，学 score 或 velocity；Song 2021 把 DDPM、NCSN 统一进 SDE；Flow Matching 用 ODE 视角 + 更短路径。</li>
+    <li><b>Drifting 是一次视角切换</b>：从"推理时演化样本"改成"训练时演化分布"，天然 1-NFE。技术核心是<b>反对称 drifting field</b> + <b>stop-grad fixed-point loss</b>。</li>
+    <li>ImageNet 256×256 单步 <b>FID 1.54 (latent) / 1.61 (pixel)</b>。</li>
+    <li>最脆的地方是 <b>identifiability</b>（$V=0 \Rightarrow q=p$）—— 也是最值得做下去的地方。</li>
+  </ol>
+
+  <div class="box" style="margin-top: 30px;">
+    <b>参考文献</b>
+    <ul style="font-size: 14.5px;">
+      <li>Song &amp; Ermon 2019. NCSN.</li>
+      <li>Ho, Jain, Abbeel 2020. DDPM.</li>
+      <li>Song et al. 2021. Score-Based Generative Modeling through SDEs.</li>
+      <li>Lipman et al. 2023. Flow Matching for Generative Modeling.</li>
+      <li>Ho &amp; Salimans 2022. Classifier-Free Diffusion Guidance.</li>
+      <li>Deng, Li, Li, Du, He 2026. Generative Modeling via Drifting.</li>
+    </ul>
+  </div>
+
+  <div style="text-align:center; margin-top: 20px; color: var(--muted);">— 讨论 —</div>
+  <div class="pageno">15 / 15</div>
+</section>
+
+</div>
+
+<nav>
+  <button onclick="prev()">◀</button>
+  <span id="pgtxt">1 / 15</span>
+  <button onclick="next()">▶</button>
+</nav>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  let idx = 0;
+  function show(i) {
+    if (i < 0 || i >= slides.length) return;
+    slides[idx].classList.remove('active');
+    slides[i].classList.add('active');
+    idx = i;
+    document.getElementById('pgtxt').textContent = (i+1) + ' / ' + slides.length;
+    if (window.MathJax && window.MathJax.typesetPromise) window.MathJax.typesetPromise();
+  }
+  function next() { show(Math.min(idx+1, slides.length-1)); }
+  function prev() { show(Math.max(idx-1, 0)); }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') next();
+    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') prev();
+    else if (e.key === 'Home') show(0);
+    else if (e.key === 'End') show(slides.length-1);
+  });
+  slides[0].classList.add('active');
+</script>
+
+</body>
+</html>
