@@ -4,7 +4,14 @@
 - arXiv：<https://arxiv.org/abs/2207.12598>
 - 日期：7.17
 
-## 背景：Classifier Guidance（Dhariwal & Nichol 2021）
+## 阅读结论
+
+- **核心问题**：classifier guidance 能提高条件一致性，但需要额外训练一个能识别加噪样本的分类器。
+- **核心方法**：同一去噪网络同时学习 conditional 与 unconditional 预测，推理时做线性外推。
+- **核心权衡**：guidance scale 越大，条件保真度通常越高、覆盖度越低；最佳 FID 与最佳 IS 不在同一点。
+- **实际代价**：标准 CFG 每个采样步要跑 conditional 与 unconditional 两次前向，不能把“无分类器”理解为“无额外推理成本”。
+
+## 1. 从 Classifier Guidance 出发
 
 在条件生成 $p(x\mid y)$ 中，用 Bayes：
 
@@ -21,7 +28,7 @@ $$
 - $w > 1$：加强条件，提升 IS，降低 diversity。
 - 需要单独训一个在**加噪数据**上的分类器 $p_\phi(y\mid x_t)$，代价高。
 
-## Classifier-Free 的想法
+## 2. Classifier-Free Guidance
 
 单一网络 $\varepsilon_\theta(x_t, t, y)$ 同时学**条件**和**无条件**两个模型：训练时以概率 $p_{\text{uncond}}$（典型 0.1–0.2）把 $y$ 替换为空标记 $\emptyset$。
 
@@ -37,7 +44,7 @@ $$
 \tilde\varepsilon = \varepsilon_\theta(x_t, t, \emptyset) + s\,\bigl(\varepsilon_\theta(x_t, t, y) - \varepsilon_\theta(x_t, t, \emptyset)\bigr)
 $$
 
-## 与 score 的等价推导
+### 2.1 与 score 的等价推导
 
 $\varepsilon$ 与 score 的关系（DDPM 侧）：
 
@@ -48,7 +55,15 @@ $$
 代入 guided 预测：
 
 $$
-\tilde\varepsilon = -\sqrt{1-\bar\alpha_t}\,\Bigl[\nabla_{x_t}\log p_t(x_t\mid \emptyset) + s\,\bigl(\nabla_{x_t}\log p_t(x_t\mid y) - \nabla_{x_t}\log p_t(x_t\mid \emptyset)\bigr)\Bigr]
+\begin{aligned}
+\tilde\varepsilon = -\sqrt{1-\bar\alpha_t}\,\Bigl[
+&\nabla_{x_t}\log p_t(x_t\mid \emptyset) \\
+&+ s\,\bigl(
+\nabla_{x_t}\log p_t(x_t\mid y)
+{}- \nabla_{x_t}\log p_t(x_t\mid \emptyset)
+\bigr)
+\Bigr].
+\end{aligned}
 $$
 
 化简（假设 $p_t(x_t\mid\emptyset) = p_t(x_t)$）：
@@ -65,7 +80,7 @@ $$
 
 **结论**：CFG 隐式实现了 $\nabla \log p_t(y\mid x_t)$ 的引导，$s$ 起 Classifier Guidance 里 $w$ 的作用（差一个基准偏移）。**不需要单独的分类器**。
 
-## 隐含的分布形式
+### 2.2 隐含的分布形式
 
 采样从
 
@@ -77,27 +92,29 @@ $$
 - $s > 1$：$p_t(y\mid x_t)$ 被"锐化"，样本更服从条件、模式塌缩加剧。
 - $s = 0$：退化为无条件。
 
-## 训练算法
+## 3. 训练与采样
 
-```
+### 3.1 训练算法
+
+```text
 输入: 数据集 {(x_0, y)}, 无条件概率 p_uncond
 repeat:
     x_0, y ~ 数据
-    y <- Ø  with prob p_uncond
+    y <- EMPTY  with prob p_uncond
     t ~ Uniform{1, ..., T}
     eps ~ N(0, I)
     x_t = sqrt(bar_alpha_t) x_0 + sqrt(1 - bar_alpha_t) eps
     take gradient step on || eps - eps_theta(x_t, t, y) ||^2
 ```
 
-## 采样算法
+### 3.2 采样算法
 
-```
+```text
 输入: 条件 y, guidance scale s
 x_T ~ N(0, I)
 for t = T, ..., 1:
     eps_cond = eps_theta(x_t, t, y)
-    eps_uncond = eps_theta(x_t, t, Ø)
+    eps_uncond = eps_theta(x_t, t, EMPTY)
     eps_tilde = eps_uncond + s * (eps_cond - eps_uncond)
     根据 DDPM/DDIM 反向公式用 eps_tilde 得到 x_{t-1}
 return x_0
@@ -106,31 +123,38 @@ return x_0
 - 推理时**每步两次前向**（cond + uncond），成本 ~2×。
 - $s$ 可任意选，无需重训。
 
-## 条件注入方式
+### 3.3 条件注入方式
 
 - Class-conditional：$y$ = 类别 embedding，加入 timestep embedding 或 AdaGN。
-- Text-to-image：$y$ = 文本 embedding（CLIP / T5），用 cross-attention 注入 U-Net（例如 GLIDE, Stable Diffusion, Imagen）。
+- Text-to-image：$y$ = 文本 embedding，用 cross-attention 注入 U-Net；GLIDE、Stable Diffusion、Imagen 等后续系统沿用了这一范式。
 - 无条件 token $\emptyset$：可学习的零向量或专用 embedding。
 
-## 实验结果（要点）
+## 4. 实验结果与局限
 
-- Class-conditional ImageNet 64×64（论文表）：guidance $s \approx 1.5$–3 时 IS 显著上升、FID 曲线呈 U 型（先降后升）。
-- 与 classifier guidance 匹配或更优，且无需额外分类器。
-- 后续工作（GLIDE、DALL·E 2、Stable Diffusion、Imagen）均将 CFG 作为默认。
+- ImageNet 64×64：小幅 guidance 得到最佳 FID，更强 guidance 持续提高 IS，但 FID 随后变差，清楚展示 fidelity-diversity frontier。
+- ImageNet 128×128：$T=256$、论文记号 $w=0.3$ 时 FID **2.43**；同表 ADM-G 为 2.97。
+- $p_{\text{uncond}}=0.1$ 与 0.2 表现接近，0.5 的整条 IS/FID frontier 较差，说明无条件训练占比也需调参。
 
-## 与其他技术的关系
+局限：
+
+- 每步两次完整去噪网络前向；按相同网络比较速度时，优势会小于只看采样步数所得的印象。
+- 大 guidance 通过牺牲覆盖度换取保真度，可能进一步压低少数模式和欠代表群体的出现概率。
+- conditional 与 unconditional 估计来自同一网络并不保证外推后的 score 在有限模型误差下对应一个一致、归一化的概率密度。
+
+## 5. 与其他技术的关系
 
 - **Classifier Guidance**（Dhariwal & Nichol 2021）：CFG 的显式版本，需要外部 $p_\phi(y\mid x_t)$。
 - **Score-based SDE**（Song 2021）：条件反向 SDE $\nabla \log p_t(x\mid y)$，CFG 是它的一个 practical 实例。
-- **Drifting Model**（Deng et al. 2026）：把 CFG 表达为负样本分布的 mixture，训练时行为，保留 1-NFE：
+- **Drifting Model**（Deng et al. 2026）：把 CFG 写成训练时的负样本 mixture，目标分布满足
 
-  $$
-  q_\theta(\cdot\mid c) = \alpha\,p_{\text{data}}(\cdot\mid c) - (\alpha - 1)\,p_{\text{data}}(\cdot\mid\emptyset),\quad \alpha = \tfrac{1}{1-\gamma}
-  $$
+$$
+q_\theta(\cdot\mid c) = \alpha\,p_{\text{data}}(\cdot\mid c) - (\alpha - 1)\,p_{\text{data}}(\cdot\mid\emptyset),
+\qquad \alpha = \frac{1}{1-\gamma}.
+$$
 
-  形式上等价于此处的 $\tilde\varepsilon$，只是执行时机不同。
+它与 CFG 都含“conditional 减 unconditional”的外推结构，但一个发生在 diffusion 推理阶段，另一个进入一步生成器的训练目标，不能视为同一算法。
 
-## 核心符号速查
+## 6. 核心符号速查
 
 | 符号 | 含义 |
 |---|---|
@@ -142,7 +166,3 @@ return x_0
 | $\varepsilon_\theta(x_t, t, \emptyset)$ | 无条件噪声预测 |
 | $\tilde\varepsilon$ | guided 组合预测 |
 | $\tilde p_t(x_t\mid y)$ | 隐含目标分布 $\propto p_t(x_t) p_t(y\mid x_t)^s$ |
-
----
-
-状态：主文完
